@@ -21,6 +21,7 @@ SLOW_LEN = 21
 SIGNAL_ON = 3      # kitne number ke cross par signal
 RESET_AT = 3       # kitne cross ke baad count wapas 1
 PHASE_OFFSET = int(os.getenv("PHASE_OFFSET", "0"))  # TradingView se count match karne ke liye (0, 1 ya 2)
+START_DATE = os.getenv("START_DATE", "2026-01-01")
 
 STATE_FILE = "state.json"
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -106,6 +107,7 @@ def main():
         return
 
     df = fetch_data()
+    df = df[df.index >= pd.Timestamp(START_DATE, tz="UTC")]
     close = df["Close"].to_numpy(dtype=float)
     sigs = compute_signals(close)
     print(f"Candles: {len(df)}, last closed candle: {df.index[-1]}, total signals: {len(sigs)}")
