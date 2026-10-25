@@ -1,0 +1,7 @@
+{
+  "XAUUSD":  {"ticker": "GC=F",     "offset": 2},
+  "ETHUSD":  {"ticker": "ETH-USD",  "offset": null},
+  "DOGEUSD": {"ticker": "DOGE-USD", "offset": null},
+  "SOLUSD":  {"ticker": "SOL-USD",  "offset": null},
+  "XAGUSD":  {"ticker": "SI=F",     "offset": null}
+}
