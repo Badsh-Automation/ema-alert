@@ -109,7 +109,10 @@ def main():
     close = df["Close"].to_numpy(dtype=float)
     sigs = compute_signals(close)
     print(f"Candles: {len(df)}, last closed candle: {df.index[-1]}, total signals: {len(sigs)}")
-
+    for i, side in sigs[-6:]:
+        t = df.index[i].astimezone(IST).strftime("%d-%b %H:%M IST")
+        print("SIGNAL:", side, t, round(close[i], 2))
+            
     state = load_state()
     if state is None:
         # pehli baar: purane signals ka mail nahi, bas baseline set karo
