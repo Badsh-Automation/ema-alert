@@ -36,22 +36,32 @@ def ema_pine(values, length):
     return out
 
 
-def compute_signals(close, offset=0):
-    """[(bar_index, 'BUY'/'SELL'), ...] return karta hai."""
+def find_crosses(close):
+    """Saare EMA cross: [(bar_index, 'BUY'/'SELL'), ...]  (BUY = fast neeche se upar)."""
     fast = ema_pine(close, FAST_LEN)
     slow = ema_pine(close, SLOW_LEN)
-    n = offset
-    result = []
+    out = []
     for i in range(1, len(close)):
         if np.isnan(fast[i]) or np.isnan(slow[i]) or np.isnan(fast[i - 1]) or np.isnan(slow[i - 1]):
             continue
-        bull = fast[i] > slow[i] and fast[i - 1] <= slow[i - 1]
-        bear = fast[i] < slow[i] and fast[i - 1] >= slow[i - 1]
-        if bull or bear:
-            n = 1 if n >= RESET_AT else n + 1
-            if n == SIGNAL_ON:
-                result.append((i, "BUY" if bull else "SELL"))
-    return result
+        if fast[i] > slow[i] and fast[i - 1] <= slow[i - 1]:
+            out.append((i, "BUY"))
+        elif fast[i] < slow[i] and fast[i - 1] >= slow[i - 1]:
+            out.append((i, "SELL"))
+    return out
+
+
+def signals_after_anchor(crosses, anchor_idx):
+    """Anchor (TradingView ka ek asli signal) ke baad ke cross gino; har 3rd par signal."""
+    n = SIGNAL_ON
+    out = []
+    for i, side in crosses:
+        if i <= anchor_idx:
+            continue
+        n = 1 if n >= RESET_AT else n + 1
+        if n == SIGNAL_ON:
+            out.append((i, side))
+    return out
 
 
 def fetch_data(ticker):
@@ -112,26 +122,36 @@ def fmt_ist(t):
 
 def process(label, cfg, state):
     ticker = cfg["ticker"]
-    offset = cfg.get("offset")
+    anchor = cfg.get("anchor")
     df = fetch_data(ticker)
     close = df["Close"].to_numpy(dtype=float)
-    print(f"\n### {label} ({ticker}) candles={len(df)} last closed={df.index[-1]} offset={offset}")
+    crosses = find_crosses(close)
+    print(f"\n### {label} ({ticker}) candles={len(df)} last closed={df.index[-1]}")
 
-    if offset is None:
-        print("NOT CALIBRATED: mail band hai. TradingView se in 3 list mein se match dhundo:")
-        for off in (0, 1, 2):
-            print(f"== {label} PHASE_OFFSET={off} ==")
-            for i, side in compute_signals(close, off)[-6:]:
-                print("SIGNAL:", side, fmt_ist(df.index[i]), fmt_price(close[i]))
+    if not anchor:
+        print("NOT CALIBRATED: mail band hai. TradingView par last signal ka exact time (IST) dhundo.")
+        print("Neeche last 8 cross hain (TradingView ka signal inhi mein se ek hoga):")
+        for i, side in crosses[-8:]:
+            print("CROSS:", side, fmt_ist(df.index[i]), fmt_price(close[i]))
         return
 
-    sigs = compute_signals(close, offset)
+    a_utc = pd.Timestamp(anchor["time"], tz="Asia/Kolkata").tz_convert("UTC")
+    a_side = anchor["side"].upper()
+    if a_utc not in df.index:
+        raise RuntimeError(f"Anchor candle data mein nahi mili ({anchor['time']} IST). Data incomplete ho sakta hai, mail band.")
+    a_idx = df.index.get_loc(a_utc)
+    if (a_idx, a_side) not in crosses:
+        near = [(fmt_ist(df.index[i]), sd) for i, sd in crosses[-8:]]
+        raise RuntimeError(f"Anchor match nahi hua ({anchor['time']} IST {a_side}). Mail band. Last crosses: {near}")
+
+    sigs = signals_after_anchor(crosses, a_idx)
+    print("Anchor OK:", anchor["time"], "IST", a_side)
     for i, side in sigs[-3:]:
         print("SIGNAL:", side, fmt_ist(df.index[i]), fmt_price(close[i]))
 
     last_str = state.get(label)
     if last_str is None:
-        base = df.index[sigs[-1][0]] if sigs else df.index[-1]
+        base = df.index[sigs[-1][0]] if sigs else a_utc
         state[label] = base.isoformat()
         save_state(state)
         print("Pehli run: baseline set hui, mail nahi bheja.")
@@ -141,14 +161,13 @@ def process(label, cfg, state):
     if last.tzinfo is None:
         last = last.tz_localize("UTC")
 
-    new = [(i, s) for i, s in sigs if df.index[i] > last]
+    new = [(i, sd) for i, sd in sigs if df.index[i] > last]
     for i, side in new:
         t = df.index[i]
-        t_close = fmt_ist(t + timedelta(hours=1))
         subject = f"{side} Signal | {label} 1H | EMA 3rd Cross"
         body = (f"EMA 3rd Cross: {side}\n"
                 f"Symbol: {label} ({ticker})\nTimeframe: 1H\n"
-                f"Candle: {fmt_ist(t)}  (close: {t_close})\n"
+                f"Candle: {fmt_ist(t)}  (close: {fmt_ist(t + timedelta(hours=1))})\n"
                 f"Close price: {fmt_price(close[i])}\n"
                 f"EMA {FAST_LEN}/{SLOW_LEN}\n\n"
                 f"Ye sirf alert hai, order nahi laga.")
