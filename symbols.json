@@ -1,7 +1,7 @@
 {
   "XAUUSD":  {"ticker": "GC=F",     "anchor": {"time": "2026-10-19 16:30", "side": "SELL"}},
-  "ETHUSD":  {"ticker": "ETH-USD",  "anchor": null},
-  "DOGEUSD": {"ticker": "DOGE-USD", "anchor": null},
-  "SOLUSD":  {"ticker": "SOL-USD",  "anchor": null},
-  "XAGUSD":  {"ticker": "SI=F",     "anchor": null}
+  "ETHUSD":  {"ticker": "ETH-USD",  "anchor": {"time": "2026-10-25 10:30", "side": "SELL"}},
+  "DOGEUSD": {"ticker": "DOGE-USD", "anchor": {"time": "2026-10-25 10:30", "side": "SELL"}},
+  "SOLUSD":  {"ticker": "SOL-USD",  "anchor": {"time": "2026-10-25 12:30", "side": "SELL"}},
+  "XAGUSD":  {"ticker": "SI=F",     "anchor": {"time": "2026-10-22 06:30", "side": "SELL"}}
 }
