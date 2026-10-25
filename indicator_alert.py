@@ -21,8 +21,8 @@ SLOW_LEN = 21
 SIGNAL_ON = 3      # kitne number ke cross par signal
 RESET_AT = 3       # kitne cross ke baad count wapas 1
 PHASE_OFFSET = int(os.getenv("PHASE_OFFSET", "0"))  # TradingView se count match karne ke liye (0, 1 ya 2)
-START_DATE = os.getenv("START_DATE", "2026-01-01")
 
+START_DATE = os.getenv("START_DATE", "2026-01-01")  # ginti isi date se shuru hogi
 STATE_FILE = "state.json"
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -39,11 +39,11 @@ def ema_pine(values, length):
     return out
 
 
-def compute_signals(close):
+def compute_signals(close, offset=None):
     """[(bar_index, 'BUY'/'SELL'), ...] return karta hai."""
     fast = ema_pine(close, FAST_LEN)
     slow = ema_pine(close, SLOW_LEN)
-    n = PHASE_OFFSET
+    n = PHASE_OFFSET if offset is None else offset
     result = []
     for i in range(1, len(close)):
         if np.isnan(fast[i]) or np.isnan(slow[i]) or np.isnan(fast[i - 1]) or np.isnan(slow[i - 1]):
@@ -68,6 +68,7 @@ def fetch_data():
     if df.index.tz is None:
         df.index = df.index.tz_localize("UTC")
     df.index = df.index.tz_convert("UTC")
+    df = df[df.index >= pd.Timestamp(START_DATE, tz="UTC")]
     # adhoori (chalti hui) candle hata do, sirf closed candles
     now = datetime.now(timezone.utc)
     if len(df) and df.index[-1] + timedelta(hours=1) > now:
@@ -107,14 +108,15 @@ def main():
         return
 
     df = fetch_data()
-    df = df[df.index >= pd.Timestamp(START_DATE, tz="UTC")]
     close = df["Close"].to_numpy(dtype=float)
     sigs = compute_signals(close)
-    print(f"Candles: {len(df)}, last closed candle: {df.index[-1]}, total signals: {len(sigs)}")
-    for i, side in sigs[-6:]:
-        t = df.index[i].astimezone(IST).strftime("%d-%b %H:%M IST")
-        print("SIGNAL:", side, t, round(close[i], 2))
-            
+    print(f"Candles: {len(df)}, last closed candle: {df.index[-1]}, START_DATE: {START_DATE}, PHASE_OFFSET in use: {PHASE_OFFSET}")
+    for off in (0, 1, 2):
+        print(f"== PHASE_OFFSET={off} ==")
+        for i, side in compute_signals(close, off)[-6:]:
+            t = df.index[i].astimezone(IST).strftime("%d-%b %H:%M IST")
+            print("SIGNAL:", side, t, round(close[i], 2))
+
     state = load_state()
     if state is None:
         # pehli baar: purane signals ka mail nahi, bas baseline set karo
